@@ -36,6 +36,9 @@ class SetlistEncoder(json.JSONEncoder):
 
 def handler(event=None, context=None):
 
+    url = event.get("url") if event else None
+    is_cover = event.get("iscover", False)  # デフォルトはFalse
+
     def get_visually_sorted_elements(url: str, is_cover: bool) -> Optional[Setlist]:
         # ヘッドレスモードの設定
 
@@ -58,13 +61,20 @@ def handler(event=None, context=None):
 
         driver = webdriver.Chrome(options=options, service=service)
 
-
         try:
             driver.get(url)
             # ページの読み込み完了を待つ
             WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.TAG_NAME, "td"))
             )
+
+            a_element = driver.find_element(
+                By.XPATH, "//*[@id='content']/div/div[5]/p/a"
+            )  # XPathでa要素を指定
+
+            if a_element:
+                text_content = a_element.text
+                a_element.click()
 
             # tdエレメントの取得とPCSL1クラスの確認
             td_elements = driver.find_elements(By.TAG_NAME, "td")
@@ -176,7 +186,7 @@ def handler(event=None, context=None):
             # Setlistオブジェクトの作成
             setlist: Setlist = {
                 "artist_name": artist_name,
-                "event_date": event_date,
+                # "event_date": event_date,
                 "location": city,
                 "venue": venue,
                 "tour_name": tour_name,
@@ -198,8 +208,7 @@ def handler(event=None, context=None):
             return o.__str__()
 
     # 使用例
-    setlist = get_visually_sorted_elements(
-        "https://www.livefans.jp/events/1631658", False
-    )
+    setlist = get_visually_sorted_elements(url, is_cover)
     if setlist:
-        return json.dumps(setlist, default=datetime_converter, ensure_ascii=False)
+        # return json.dumps(setlist, default=datetime_converter, ensure_ascii=False, indent=2, cls=SetlistEncoder)
+        return setlist
