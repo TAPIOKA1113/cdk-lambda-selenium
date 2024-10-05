@@ -68,13 +68,15 @@ def handler(event=None, context=None):
                 EC.presence_of_element_located((By.TAG_NAME, "td"))
             )
 
-            a_element = driver.find_element(
-                By.XPATH, "//*[@id='content']/div/div[5]/p/a"
-            )  # XPathでa要素を指定
-
-            if a_element:
-                text_content = a_element.text
-                a_element.click()
+            try:
+                a_element = driver.find_element(
+                    By.XPATH, "//*[@id='content']/div/div[5]/p/a"
+                )  # XPathでa要素を指定
+                if a_element:
+                    text_content = a_element.text
+                    a_element.click()
+            except Exception as e:
+                pass
 
             # tdエレメントの取得とPCSL1クラスの確認
             td_elements = driver.find_elements(By.TAG_NAME, "td")
