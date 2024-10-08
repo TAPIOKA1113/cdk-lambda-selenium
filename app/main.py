@@ -110,10 +110,17 @@ def main(event=None, context=None):
                 event_date = datetime.now()  # フォールバック
 
             # 会場情報の取得
-            venue_element = driver.find_element(
-                By.CSS_SELECTOR,
-                "#content > div > div.dataBlock > div.profile > address > a",
-            )
+            try:
+                venue_element = driver.find_element(
+                    By.CSS_SELECTOR,
+                    "#content > div > div.dataBlock > div.profile > address > a"
+                )
+            except:
+                # aタグが見つからない場合、address要素自体のテキストを取得
+                venue_element = driver.find_element(
+                    By.CSS_SELECTOR,
+                    "#content > div > div.dataBlock > div.profile > address"
+                )
             venue = venue_element.text.replace("＠", "")
 
             # 都市の取得
@@ -121,10 +128,14 @@ def main(event=None, context=None):
             city = city_match.group(1) if city_match else ""
 
             # ツアー名の取得
-            tour_name = driver.find_element(
-                By.CSS_SELECTOR,
-                "#content > div > div.dataBlock > div.head > h4.liveName2 > a",
-            ).text
+            tour_name = "不明"  # デフォルト値
+            selectors = ["h4.liveName2 > a", "h3.liveName > a"]
+            for selector in selectors:
+                try:
+                    tour_name = driver.find_element(By.CSS_SELECTOR, selector).text
+                    break
+                except:
+                    continue
 
             unsort_setlist_songs: List[Song] = []
 
