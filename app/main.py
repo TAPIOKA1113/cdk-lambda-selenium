@@ -26,15 +26,24 @@ class Setlist(TypedDict):
     songs: List[Song]
     setlist_id: Optional[int]
 
-
 class SetlistEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, datetime):
             return obj.isoformat()
         return super().default(obj)
+    
+def handler(event, context):
+    handler_type = event.get('handler_type', 'main') # defaultはmain
+
+    print(f"ハンドラータイプ: {handler_type}")
+    
+    if handler_type == 'sub':
+        return sub(event, context)
+    else:
+        return main(event, context)
 
 
-def handler(event=None, context=None):
+def main(event=None, context=None):
 
     url = event.get("url") if event else None
     is_cover = event.get("iscover", False)  # デフォルトはFalse
@@ -72,8 +81,7 @@ def handler(event=None, context=None):
                     By.XPATH, "//*[@id='content']/div/div[5]/p/a"
                 )  # XPathでa要素を指定
             if a_element:
-                text_content = a_element.text
-                a_element.click()
+                a_element[0].click()
 
             # tdエレメントの取得とPCSL1クラスの確認
             td_elements = driver.find_elements(By.TAG_NAME, "td")
@@ -211,3 +219,97 @@ def handler(event=None, context=None):
     if setlist:
         # return json.dumps(setlist, default=datetime_converter, ensure_ascii=False, indent=2, cls=SetlistEncoder)
         return setlist
+
+
+
+
+
+def sub(event=None, context=None):
+
+    url = event.get("url") if event else None
+
+    def extract_concert_info(driver, div_element):
+        concert_name = div_element.find_element(By.CSS_SELECTOR, 'h3.artistName a').text.strip()
+        date_and_venue = div_element.find_element(By.CSS_SELECTOR, 'p.date').text.strip()
+        date, venue = [item.strip() for item in date_and_venue.split('\n')]
+        clean_venue = venue.replace('@', '')
+
+        # aタグのhref属性からIDを抽出
+        a_element = div_element.find_element(By.CSS_SELECTOR, 'h3.artistName a')
+        href = a_element.get_attribute('href')
+        id_match = re.search(r'/events/(\d+)', href)
+        concert_id = id_match.group(1) if id_match else None
+
+
+        return {
+            'concert_name': concert_name,
+            'date': date,
+            'venue': clean_venue,
+            'concert_id': concert_id
+
+        }
+
+
+    def get_visually_sorted_elements(url: str):
+        # ヘッドレスモードの設定
+
+        options = webdriver.ChromeOptions()
+        service = webdriver.ChromeService("/opt/chromedriver")
+
+        options.binary_location = "/opt/chrome/chrome"
+        options.add_argument("--headless=new")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--window-size=1280x1696")
+        options.add_argument("--single-process")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-dev-tools")
+        options.add_argument("--no-zygote")
+        options.add_argument(f"--user-data-dir={mkdtemp()}")
+        options.add_argument(f"--data-path={mkdtemp()}")
+        options.add_argument(f"--disk-cache-dir={mkdtemp()}")
+        options.add_argument("--remote-debugging-port=9222")
+
+        driver = webdriver.Chrome(options=options, service=service)
+
+        try:
+            driver.get(url)
+            # 指定されたXPathのa要素を見つけてクリック
+            a_element = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable(
+                (By.XPATH, "//a[contains(text(), 'プロフィール')]")
+            )
+            )
+            a_element.click()
+
+            a_element = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.XPATH, '//*[@id="relLiveList"]/p/a'))
+            )
+            a_element.click()
+
+            # divタグ空要素を取得
+            div_elements = WebDriverWait(driver, 10).until(
+                EC.presence_of_all_elements_located((By.XPATH, '//div[contains(@class, "whiteBack") and contains(@class, "midBox") and .//a[contains(text(), "セットリスト")]]'))
+            )
+
+            # すべてのコンサート情報を抽出
+            concert_info_list = [extract_concert_info(driver, div) for div in div_elements]
+
+            return concert_info_list
+
+        except Exception as e:
+            print(f"エラーが発生しました: {str(e)}")
+            return None
+
+        finally:
+            driver.quit()
+
+
+    concert_list = get_visually_sorted_elements(url)    
+
+    if concert_list:
+        return concert_list
+        for concert in concert_list:
+            print(json.dumps(concert, ensure_ascii=False))
+    else:
+        print("コンサート情報の取得に失敗しました。")
